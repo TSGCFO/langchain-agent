@@ -1,0 +1,340 @@
+# Project Guidelines
+
+## Project Description and scope
+
+The system shall implement a distributed multi-agent architecture orchestrating specialized agents powered by OpenAI, Anthropic, and Google models, each precisely matched to their functional requirements. Agents will operate within a sophisticated coordination framework enabling real-time collaboration, transparent communication flows, and intelligent task routing based on agent capabilities and current system load.
+
+The core architecture will feature advanced machine learning algorithms for continuous performance optimization, comprehensive RAG implementation with dynamic knowledge base updates, persistent memory management with contextual awareness, robust hallucination detection and mitigation protocols, intelligent task decomposition with automated fallback routing, self-evolving training mechanisms, and real-time performance analytics driving autonomous system refinements.
+
+Agents will leverage meticulously crafted prompts incorporating latest prompt engineering techniques, including chain-of-thought reasoning, few-shot learning, and constitutional AI principles. The system will maintain a dynamic tool repository with automated tool synthesis capabilities, allowing agents to access both shared resources and specialized instruments calibrated to their specific functions.
+
+The architecture will seamlessly integrate with modern UI frameworks while maintaining clear separation of concerns between frontend experiences and backend complexity. RESTful APIs and WebSocket connections will enable responsive real-time interactions.
+
+System design will emphasize horizontal scalability through containerization and microservices, fault tolerance through distributed redundancy, comprehensive logging and monitoring, and clean, modular code organization following SOLID principles. Performance optimization will be achieved through intelligent caching, load balancing, and asynchronous processing where applicable.
+
+
+
+## Rules and Guidelines
+
+## Rules
+
+1. Make sure to follow good practices whencreating the project structure. Do not create unnecessary files or folders. Keep the project structure clean and organized. 
+2. Make sure to follow the writing guidelines when contributing to this project.
+3. Make sure to follow the code reuse and refactoring guidelines when contributing to this project.
+4. Avoid Redundancy. Do not duplicate code. Refactor the code and use it whenever necessary.
+
+
+### Make sure that you only use the following LLM models:
+
+#### Anthropic
+1. claude-3-5-sonnet-20241022
+
+#### OpenAI
+1. **Flagship models**
+    - [GPT models](https://docs/models#gpt-4o): GPT models are fast, versatile, cost-efficient, and customizable.
+    - [Use gpt-4o](https://docs/models#gpt-4o)
+    - [Use gpt-4o-mini](https://docs/models#gpt-4o-mini)
+
+2. **Reasoning models**
+    - [Reasoning models](https://docs/models#o3-mini): Reasoning models use chain-of-thought reasoning to excel at complex tasks.
+    - [Use o1](https://docs/models#o1)
+    - [Use o3-mini](https://docs/models#o3-mini)
+
+3. **Model pricing details**
+    - [Model pricing details](https://docs/pricing)
+
+4. **Models overview**
+    - The OpenAI API is powered by a diverse set of models with different capabilities and price points. You can also make customizations to our models for your specific use case with [fine-tuning](https://docs/guides/fine-tuning).
+
+    | Model Type | Description |
+    |------------|-------------|
+    | GPT models | Our fast, versatile, high-intelligence flagship models |
+    | Reasoning models | Our o-series reasoning models excel at complex, multi-step tasks |
+    | GPT-4o Realtime | GPT-4o models capable of realtime text and audio inputs and outputs |
+    | GPT-4o Audio | GPT-4o models capable of audio inputs and outputs via REST API |
+    | DALL·E | A model that can generate and edit images given a natural language prompt |
+    | TTS | A set of models that can convert text into natural sounding spoken audio |
+    | Whisper | A model that can convert audio into text |
+    | Embeddings | A set of models that can convert text into a numerical form |
+    | Moderation | A fine-tuned model that can detect whether text may be sensitive or unsafe |
+    | Deprecated | A full list of models that have been deprecated along with the suggested replacement |
+
+    We have also published open source models including [Point-E](https://github.com/openai/point-e), [Whisper](https://github.com/openai/whisper), [Jukebox](https://github.com/openai/jukebox), and [CLIP](https://github.com/openai/CLIP).
+
+5. **Context window**
+    - Models on this page will list a **context window**, which refers to the maximum number of tokens that can be used in a single request, inclusive of both input, output, and reasoning tokens.
+
+    ![context window visualization](https://cdn.openai.com/API/docs/images/context-window.png)
+
+    You can estimate the number of tokens your messages will use with the [tokenizer tool](https://tokenizer).
+
+6. **Model ID aliases and snapshots**
+    - In the tables below, you will see **model IDs** that can be used in REST APIs like [chat completions](https://docs/api-reference/chat) to generate outputs. Some of these model IDs are **aliases** which point to specific **dated snapshots**.
+
+    ```javascript
+    import OpenAI from "openai";
+    const openai = new OpenAI();
+    const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+            { role: "developer", content: "You are a helpful assistant." },
+            { role: "user", content: "Write a haiku about recursion in programming." },
+        ],
+        store: true,
+    });
+    console.log(completion.choices[0].message);
+    ```
+
+    ```python
+    from openai import OpenAI
+    client = OpenAI()
+    completion = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "developer", "content": "You are a helpful assistant."},
+            { "role": "user", "content": "Write a haiku about recursion in programming." }
+        ]
+    )
+    print(completion.choices[0].message)
+    ```
+
+    ```bash
+    curl "https://api.openai.com/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $OPENAI_API_KEY" \
+    -d '{ "model": "gpt-4o", "messages": [ { "role": "developer", "content": "You are a helpful assistant." }, { "role": "user", "content": "Write a haiku about recursion in programming." } ] }'
+    ```
+
+    In API requests where an alias was used as a model ID, the body of the response will contain the actual model ID used to generate the response.
+
+    ```json
+    {
+        "id": "chatcmpl-Af6LFgbOPpqu2fhGsVktc9xFaYUVh",
+        "object": "chat.completion",
+        "created": 1734359189,
+        "model": "gpt-4o-2024-08-06",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Code within a loop, \nFunction calls itself again, \nInfinite echoes.",
+                    "refusal": null
+                },
+                "logprobs": null,
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {}
+    }
+    ```
+
+7. **Current model aliases**
+    - Below, please find current model aliases, and guidance on when they will be updated to new versions (if guidance is available).
+
+    | Alias | Model ID |
+    |-------|----------|
+    | gpt-4o | gpt-4o-2024-08-06 |
+    | chatgpt-4o-latest | Latest used in ChatGPT |
+    | gpt-4o-mini | gpt-4o-mini-2024-07-18 |
+    | o1 | o1-2024-12-17 |
+    | o1-mini | o1-mini-2024-09-12 |
+    | o3-mini | o3-mini-2025-01-31 |
+    | o1-preview | o1-preview-2024-09-12 |
+    | gpt-4o-realtime-preview | gpt-4o-realtime-preview-2024-12-17 |
+    | gpt-4o-mini-realtime-preview | gpt-4o-mini-realtime-preview-2024-12-17 |
+    | gpt-4o-audio-preview | gpt-4o-audio-preview-2024-12-17 |
+
+    In production applications, **it is a best practice to use dated model snapshot IDs** instead of aliases, which may change periodically.
+
+8. **GPT-4o**
+    - GPT-4o (“o” for “omni”) is our versatile, high-intelligence flagship model. It accepts both text and [image inputs](https://docs/guides/vision), and produces [text outputs](https://docs/guides/text-generation) (including [Structured Outputs](https://docs/guides/structured-outputs)). Learn how to use GPT-4o in our [text generation guide](https://docs/guides/text-generation).
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | gpt-4o-2024-08-06 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-2024-11-20 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-2024-08-06 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-2024-05-13 | 128,000 tokens | 4,096 tokens |
+    | chatgpt-4o-latest | GPT-4o used in ChatGPT | 128,000 tokens | 16,384 tokens |
+
+9. **GPT-4o mini**
+    - GPT-4o mini (“o” for “omni”) is a fast, affordable small model for focused tasks. It accepts both text and [image inputs](https://docs/guides/vision), and produces [text outputs](https://docs/guides/text-generation) (including [Structured Outputs](https://docs/guides/structured-outputs)). It is ideal for [fine-tuning](https://docs/guides/fine-tuning), and model outputs from a larger model like GPT-4o can be [distilled](https://docs/guides/distillation) to GPT-4o-mini to produce similar results at lower cost and latency.
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | gpt-4o-mini-2024-07-18 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-mini-2024-07-18 | 128,000 tokens | 16,384 tokens |
+
+10. **o1 and o1-mini**
+    - The **o1 series** of models are trained with reinforcement learning to perform complex reasoning. o1 models think before they answer, producing a long internal chain of thought before responding to the user. Learn about the capabilities of o1 models in our [reasoning guide](https://docs/guides/reasoning).
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | o1-2024-12-17 | 200,000 tokens | 100,000 tokens |
+    | o1-2024-12-17 | 200,000 tokens | 100,000 tokens |
+    | o1-mini-2024-09-12 | 128,000 tokens | 65,536 tokens |
+    | o1-mini-2024-09-12 | 128,000 tokens | 65,536 tokens |
+    | o1-preview-2024-09-12 | 128,000 tokens | 32,768 tokens |
+    | o1-preview-2024-09-12 | 128,000 tokens | 32,768 tokens |
+
+11. **o3-mini**
+    - **o3-mini** is our most recent small [reasoning model](https://docs/guides/reasoning), providing high intelligence at the same cost and latency targets of o1-mini. o3-mini also supports key developer features, like [Structured Outputs](https://docs/guides/structured-outputs), [function calling](https://docs/guides/function-calling), [Batch API](https://docs/guides/batch), and more. Like other models in the o-series, it is designed to excel at science, math, and coding tasks.
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | o3-mini-2025-01-31 | 200,000 tokens | 100,000 tokens |
+    | o3-mini-2025-01-31 | 200,000 tokens | 100,000 tokens |
+
+12. **GPT-4o and GPT-4o-mini Realtime Beta**
+    - This is a preview release of the GPT-4o and GPT-4o-mini Realtime models. These models are capable of responding to audio and text inputs in realtime over WebRTC or a WebSocket interface. Learn more in the [Realtime API guide](https://docs/guides/realtime).
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | gpt-4o-realtime-preview-2024-12-17 | 128,000 tokens | 4,096 tokens |
+    | gpt-4o-realtime-preview-2024-12-17 | 128,000 tokens | 4,096 tokens |
+    | gpt-4o-realtime-preview-2024-10-01 | 128,000 tokens | 4,096 tokens |
+    | gpt-4o-mini-realtime-preview-2024-12-17 | 128,000 tokens | 4,096 tokens |
+    | gpt-4o-mini-realtime-preview-2024-12-17 | 128,000 tokens | 4,096 tokens |
+
+13. **GPT-4o and GPT-4o-mini Audio Beta**
+    - This is a preview release of the GPT-4o Audio models. These models accept audio inputs and outputs, and can be used in the Chat Completions REST API. [Learn more](https://docs/guides/audio).
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | gpt-4o-audio-preview-2024-12-17 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-audio-preview-2024-12-17 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-audio-preview-2024-10-01 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-mini-audio-preview-2024-12-17 | 128,000 tokens | 16,384 tokens |
+    | gpt-4o-mini-audio-preview-2024-12-17 | 128,000 tokens | 16,384 tokens |
+
+14. **GPT-4 Turbo and GPT-4**
+    - GPT-4 is an older version of a high-intelligence GPT model, usable in [Chat Completions](https://docs/api-reference/chat). Learn more in the [text generation guide](https://docs/guides/text-generation).
+
+    | Model ID | Context Window | Max Output Tokens |
+    |----------|----------------|-------------------|
+    | gpt-4-turbo-2024-04-09 | 128,000 tokens | 4,096 tokens |
+    | gpt-4-turbo-2024-04-09 | 128,000 tokens | 4,096 tokens |
+    | gpt-4-turbo-preview | gpt-4-0125-preview | 128,000 tokens | 4,096 tokens |
+    | gpt-4-0125-preview | 128,000 tokens | 4,096 tokens |
+    | gpt-4-1106-preview | 128,000 tokens | 4,096 tokens |
+    | gpt-4-0613 | 8,192 tokens | 8,192 tokens |
+    | gpt-4-0613 | 8,192 tokens | 8,192 tokens |
+    | gpt-4-0314 | 8,192 tokens | 8,192 tokens |
+
+15. **GPT-3.5 Turbo**
+    - GPT-3.5 Turbo models can understand and generate natural language or code and have been optimized for chat using the [Chat Completions API](https://docs/api-reference/chat) but work well for non-chat tasks as well. As of July 2024, `gpt-4o-mini` should be used in place of `gpt-3.5-turbo`, as it is cheaper, more capable, multimodal, and just as fast. `gpt-3.5-turbo` is still available for use in the API.
+
+    | Model ID | Context Window | Max Output Tokens | Knowledge Cutoff |
+    |----------|----------------|-------------------|------------------|
+    | gpt-3.5-turbo-0125 | 16,385 tokens | 4,096 tokens | Sep 2021 |
+    | gpt-3.5-turbo | 16,385 tokens | 4,096 tokens | Sep 2021 |
+    | gpt-3.5-turbo-1106 | 16,385 tokens | 4,096 tokens | Sep 2021 |
+    | gpt-3.5-turbo-instruct | 4,096 tokens | 4,096 tokens | Sep 2021 |
+
+16. **DALL·E**
+    - DALL·E is an AI system that can create realistic images and art from a description in natural language. DALL·E 3 currently supports the ability, given a prompt, to create a new image with a specific size. DALL·E 2 also supports the ability to edit an existing image, or create variations of a user-provided image. [DALL·E 3](https://openai.com/dall-e-3) is available through our [Images API](https://docs/guides/images) along with [DALL·E 2](https://openai.com/blog/dall-e-api-now-available-in-public-beta). You can try DALL·E 3 through [ChatGPT Plus](https://chatgpt.com).
+
+    | Model ID | Description |
+    |----------|-------------|
+    | dall-e-3 | The latest DALL·E model released in Nov 2023. Learn more. |
+    | dall-e-2 | The previous DALL·E model released in Nov 2022. The 2nd iteration of DALL·E with more realistic, accurate, and 4x greater resolution images than the original model. |
+
+17. **TTS**
+    - TTS is an AI model that converts text to natural sounding spoken text. We offer two different model variants, `tts-1` is optimized for real-time text to speech use cases and `tts-1-hd` is optimized for quality. These models can be used with the [Speech endpoint in the Audio API](https://docs/guides/text-to-speech).
+
+    | Model ID | Description |
+    |----------|-------------|
+    | tts-1 | The latest text to speech model, optimized for speed. |
+    | tts-1-hd | The latest text to speech model, optimized for quality. |
+
+18. **Whisper**
+    - Whisper is a general-purpose speech recognition model. It is trained on a large dataset of diverse audio and is also a multi-task model that can perform multilingual speech recognition as well as speech translation and language identification. The Whisper v2-large model is currently available through our API with the `whisper-1` model name. Currently, there is no difference between the [open source version of Whisper](https://github.com/openai/whisper) and the version available through our API. However, [through our API](https://docs/guides/speech-to-text), we offer an optimized inference process which makes running Whisper through our API much faster than doing it through other means. For more technical details on Whisper, you can [read the paper](https://arxiv.org/abs/2212.04356).
+
+19. **Embeddings**
+    - Embeddings are a numerical representation of text that can be used to measure the relatedness between two pieces of text. Embeddings are useful for search, clustering, recommendations, anomaly detection, and classification tasks. You can read more about our latest embedding models in the [announcement blog post](https://openai.com/blog/new-embedding-models-and-api-updates).
+
+    | Model ID | Output Dimension |
+    |----------|------------------|
+    | text-embedding-3-large | Most capable embedding model for both english and non-english tasks | 3,072 |
+    | text-embedding-3-small | Increased performance over 2nd generation ada embedding model | 1,536 |
+    | text-embedding-ada-002 | Most capable 2nd generation embedding model, replacing 16 first generation models | 1,536 |
+
+20. **Moderation**
+    - The Moderation models are designed to check whether content complies with OpenAI's [usage policies](https://openai.com/policies/usage-policies). The models provide classification capabilities that look for content in categories like hate, self-harm, sexual content, violence, and others. Learn more about moderating text and images in our [moderation guide](https://docs/guides/moderation).
+
+    | Model ID | Max Tokens |
+    |----------|------------|
+    | omni-moderation-latest | Currently points to omni-moderation-2024-09-26 | 32,768 |
+    | omni-moderation-2024-09-26 | Latest pinned version of our new multi-modal moderation model, capable of analyzing both text and images. | 32,768 |
+    | text-moderation-latest | Currently points to text-moderation-007 | 32,768 |
+    | text-moderation-stable | Currently points to text-moderation-007 | 32,768 |
+    | text-moderation-007 | Previous generation text-only moderation. We expect omni-moderation-\* models to be the best default moving forward. | 32,768 |
+
+21. **GPT base**
+    - GPT base models can understand and generate natural language or code but are not trained with instruction following. These models are made to be replacements for our original GPT-3 base models and use the legacy Completions API. Most customers should use GPT-3.5 or GPT-4.
+
+    | Model ID | Max Tokens | Knowledge Cutoff |
+    |----------|------------|------------------|
+    | babbage-002 | Replacement for the GPT-3 ada and babbage base models. | 16,384 tokens | Sep 2021 |
+    | davinci-002 | Replacement for the GPT-3 curie and davinci base models. | 16,384 tokens | Sep 2021 |
+
+
+
+    \*\*\\*\\* Assistants API:\*\*
+    \* Objects related to the Assistants API are deleted from our servers 30 days after you delete them via the API or the dashboard. Objects that are not deleted via the API or dashboard are retained indefinitely.
+
+    \*\*Evaluations:\*\*
+    \* [Evaluation](https://evaluations) data: When you create an evaluation, the data related to that evaluation is deleted from our servers 30 days after you delete it via the dashboard. Evaluation data that is not deleted via the dashboard is retained indefinitely.
+
+    For details, see our [API data usage policies](https://openai.com/policies/api-data-usage-policies). To learn more about zero retention, get in touch with our [sales team](https://openai.com/contact-sales).
+
+    ### Model endpoint compatibility
+
+    | Endpoint | Latest models |
+    |----------|---------------|
+    | /v1/assistants | All o-series, all GPT-4o (except chatgpt-4o-latest), GPT-4o-mini, GPT-4, and GPT-3.5 Turbo models. The retrieval tool requires gpt-4-turbo-preview (and subsequent dated model releases) or gpt-3.5-turbo-1106 (and subsequent versions). |
+    | /v1/audio/transcriptions | whisper-1 |
+    | /v1/audio/translations | whisper-1 |
+    | /v1/audio/speech | tts-1, tts-1-hd |
+    | /v1/chat/completions | All o-series, GPT-4o (except for Realtime preview), GPT-4o-mini, GPT-4, and GPT-3.5 Turbo models and their dated releases. chatgpt-4o-latest dynamic model. Fine-tuned versions of gpt-4o, gpt-4o-mini, gpt-4, and gpt-3.5-turbo. |
+    | /v1/completions (Legacy) | gpt-3.5-turbo-instruct, babbage-002, davinci-002 |
+    | /v1/embeddings | text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002 |
+    | /v1/fine\_tuning/jobs | gpt-4o, gpt-4o-mini, gpt-4, gpt-3.5-turbo |
+    | /v1/moderations | text-moderation-stable, text-moderation-latest |
+    | /v1/images/generations | dall-e-2, dall-e-3 |
+    | /v1/realtime (beta) | gpt-4o-realtime-preview, gpt-4o-realtime-preview-2024-10-01 |
+
+    This list excludes all of our [deprecated models](https://docs/deprecations).
+
+## Writing Guidelines
+
+When contributing to this project, please adhere to the following writing guidelines:
+
+1. **Clarity**: Ensure that your code and comments are clear and easy to understand.
+2. **Consistency**: Follow the project's coding standards and style guides.
+3. **Documentation**: Document your code thoroughly, including inline comments and external documentation if necessary.
+4. **Commit Messages**: Write meaningful commit messages that accurately describe the changes made.
+5. **Code Reviews**: Participate actively in code reviews and provide constructive feedback.
+6. **Variable Names**: Use descriptive and meaningful variable names.
+7. **Function Length**: Keep functions focused and concise, ideally under 30 lines.
+8. **Error Handling**: Implement proper error handling and logging.
+9. **Best Practices**: Always follow industry best practices for coding and design.
+
+## Code Reuse and Refactoring Guidelines
+
+Please reuse or refactor existing files whenever possible. We aim to keep the codebase clean and avoid redundancy. After refactoring, ensure that the code still works as expected and, once confident, remove redundant code and files. Always maintain a solid file structure and keep the codebase organized.
+
+## Testing Guidelines
+
+1. **Unit Tests**: Write unit tests for all new features and bug fixes.
+2. **Test Coverage**: Maintain a minimum test coverage of 80%.
+3. **Integration Tests**: Include integration tests for complex features.
+4. **Test Documentation**: Document test cases and their expected outcomes.
+
+## Performance Guidelines
+
+1. **Optimization**: Optimize code for performance where necessary.
+2. **Benchmarking**: Include performance benchmarks for critical operations.
+3. **Memory Usage**: Monitor and optimize memory usage.
+4. **Load Testing**: Conduct load tests for scalable features.
