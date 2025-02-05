@@ -1,11 +1,9 @@
 import { BaseAgent, AgentConfig, AgentError } from './BaseAgent';
 import { Message, MessageType, Priority } from '../bus/types';
-import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { RunnableSequence } from "@langchain/core/runnables";
-import { StringOutputParser } from "@langchain/core/output_parsers";
-import { Document } from "@langchain/core/documents";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { BaseRetriever } from "@langchain/core/retrievers";
-import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
+import { Document } from "@langchain/core/documents";
+import { generateText } from '../llm/anthropic';
 
 export interface RAGAgentConfig extends AgentConfig {
   retriever: BaseRetriever;
@@ -20,7 +18,6 @@ interface RAGRequest {
 
 export class RAGAgent extends BaseAgent {
   private retriever: BaseRetriever;
-  private chain: RunnableSequence;
   private systemPrompt: string;
 
   constructor(config: RAGAgentConfig) {
@@ -36,41 +33,13 @@ export class RAGAgent extends BaseAgent {
     });
 
     this.retriever = config.retriever;
-    this.systemPrompt = config.systemPrompt || 
-      'You are a helpful AI assistant that answers questions based on the provided context.';
-    
-    this.chain = this.createChain();
+    this.systemPrompt = config.systemPrompt || this.getDefaultSystemPrompt();
   }
 
-  private createChain(): RunnableSequence {
-    const prompt = ChatPromptTemplate.fromMessages([
-      ['system', this.systemPrompt],
-      new MessagesPlaceholder('chat_history'),
-      ['human', 'Context: {context}\n\nQuestion: {question}'],
-    ]);
-
-    return RunnableSequence.from([
-      {
-        question: (input: RAGRequest) => input.query,
-        context: async (input: RAGRequest) => {
-          if (input.context) return input.context;
-
-          const docs = await this.retriever.getRelevantDocuments(input.query);
-          return this.formatDocuments(docs, input.maxDocuments || 3);
-        },
-        chat_history: () => this.context.messages
-      },
-      prompt,
-      this.model,
-      new StringOutputParser()
-    ]);
-  }
-
-  private formatDocuments(docs: Document[], maxDocs: number): string {
-    return docs
-      .slice(0, maxDocs)
-      .map((doc, i) => `[${i + 1}] ${doc.pageContent}`)
-      .join('\n\n');
+  private getDefaultSystemPrompt(): string {
+    return `You are a knowledgeable assistant that provides accurate and helpful responses based on the given context.
+    Always ground your responses in the provided context and be explicit when information might be missing or unclear.
+    If the context doesn't contain relevant information, acknowledge this and suggest what additional information might be needed.`;
   }
 
   protected async processMessage(message: Message): Promise<void> {
@@ -84,12 +53,11 @@ export class RAGAgent extends BaseAgent {
         throw new AgentError('Query is required for RAG requests');
       }
 
-      // Generate response
-      const response = await this.chain.invoke(request);
+      // Get relevant documents
+      const docs = await this.getRelevantDocuments(request);
 
-      // Add to context
-      this.addToContext(new HumanMessage(request.query));
-      this.addToContext(new AIMessage(response));
+      // Generate response
+      const response = await this.generateResponse(request.query, docs);
 
       // Send response
       await this.sendMessage(
@@ -98,6 +66,7 @@ export class RAGAgent extends BaseAgent {
           query: request.query,
           response,
           metadata: {
+            documentCount: docs.length,
             timestamp: Date.now(),
             correlationId: message.metadata.correlationId
           }
@@ -113,6 +82,47 @@ export class RAGAgent extends BaseAgent {
     }
   }
 
+  private async getRelevantDocuments(request: RAGRequest): Promise<Document[]> {
+    try {
+      if (request.context) {
+        // If context is provided, create a single document from it
+        return [
+          new Document({
+            pageContent: request.context,
+            metadata: { source: 'user-provided' }
+          })
+        ];
+      }
+
+      // Otherwise, retrieve documents using the retriever
+      const docs = await this.retriever.getRelevantDocuments(request.query);
+      const maxDocs = request.maxDocuments || 3;
+      return docs.slice(0, maxDocs);
+    } catch (error) {
+      throw new AgentError(`Failed to retrieve documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async generateResponse(query: string, docs: Document[]): Promise<string> {
+    try {
+      // Format documents into context string
+      const context = docs
+        .map((doc, i) => `[${i + 1}] ${doc.pageContent}`)
+        .join('\n\n');
+
+      // Create messages for the model
+      const messages = [
+        new SystemMessage(this.systemPrompt),
+        new HumanMessage(`Context:\n${context}\n\nQuestion: ${query}`)
+      ];
+
+      // Generate response
+      return await generateText(this.model, messages);
+    } catch (error) {
+      throw new AgentError(`Failed to generate response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   /**
    * Add documents to the retriever
    */
@@ -124,18 +134,8 @@ export class RAGAgent extends BaseAgent {
         throw new AgentError('Retriever does not support adding documents');
       }
     } catch (error) {
-      if (error instanceof Error) {
-        throw new AgentError(`Failed to add documents: ${error.message}`);
-      }
-      throw error;
+      throw new AgentError(`Failed to add documents: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }
-
-  /**
-   * Clear the context history
-   */
-  public clearContext(): void {
-    this.context.messages = [];
   }
 
   /**
@@ -152,6 +152,7 @@ export class RAGAgent extends BaseAgent {
       maxDocuments
     };
 
-    return await this.chain.invoke(request);
+    const docs = await this.getRelevantDocuments(request);
+    return await this.generateResponse(query, docs);
   }
 }
