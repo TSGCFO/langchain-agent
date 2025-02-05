@@ -1,10 +1,20 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+interface CommandResponse {
+  analysis?: {
+    reasoning?: string;
+    toolName?: string;
+    parameters?: Record<string, unknown>;
+  };
+  result?: unknown;
+  status?: string;
+  error?: string;
+}
+
 interface CommandContextType {
   connected: boolean;
-  sendCommand: (command: string) => Promise<void>;
-  lastResponse: string | null;
+  sendCommand: (command: string) => Promise<CommandResponse>;
 }
 
 const CommandContext = createContext<CommandContextType | undefined>(undefined);
@@ -16,7 +26,6 @@ interface CommandProviderProps {
 export function CommandProvider({ children }: CommandProviderProps) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
-  const [lastResponse, setLastResponse] = useState<string | null>(null);
 
   useEffect(() => {
     // Initialize socket connection
@@ -36,22 +45,6 @@ export function CommandProvider({ children }: CommandProviderProps) {
       setConnected(false);
     });
 
-    // Response handlers
-    newSocket.on('command_response', (response: any) => {
-      console.log('Received command response:', response);
-      setLastResponse(JSON.stringify(response));
-    });
-
-    newSocket.on('query_response', (response: string) => {
-      console.log('Received query response:', response);
-      setLastResponse(response);
-    });
-
-    newSocket.on('error', (error: Error) => {
-      console.error('Socket error:', error);
-      setLastResponse(`Error: ${error.message}`);
-    });
-
     setSocket(newSocket);
 
     // Cleanup on unmount
@@ -60,32 +53,34 @@ export function CommandProvider({ children }: CommandProviderProps) {
     };
   }, []);
 
-  const sendCommand = async (command: string) => {
+  const sendCommand = async (command: string): Promise<CommandResponse> => {
     if (!socket || !connected) {
       throw new Error('Not connected to server');
     }
 
-    return new Promise<void>((resolve, reject) => {
-      // Set up a one-time response handler
-      const responseHandler = (response: any) => {
-        resolve();
+    return new Promise((resolve, reject) => {
+      // Set up response handlers
+      const handleResponse = (response: CommandResponse) => {
+        socket.off('command_response', handleResponse);
+        socket.off('error', handleError);
+        resolve(response);
       };
 
-      const errorHandler = (error: Error) => {
-        reject(error);
+      const handleError = (error: { message: string }) => {
+        socket.off('command_response', handleResponse);
+        socket.off('error', handleError);
+        reject(new Error(error.message));
       };
 
-      // Send the command
+      // Send command and listen for response
       socket.emit('command', command);
+      socket.once('command_response', handleResponse);
+      socket.once('error', handleError);
 
-      // Listen for response
-      socket.once('command_response', responseHandler);
-      socket.once('error', errorHandler);
-
-      // Clean up handlers after 30 seconds (timeout)
+      // Set timeout
       setTimeout(() => {
-        socket.off('command_response', responseHandler);
-        socket.off('error', errorHandler);
+        socket.off('command_response', handleResponse);
+        socket.off('error', handleError);
         reject(new Error('Command timed out'));
       }, 30000);
     });
@@ -94,7 +89,6 @@ export function CommandProvider({ children }: CommandProviderProps) {
   const value = {
     connected,
     sendCommand,
-    lastResponse,
   };
 
   return (

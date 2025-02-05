@@ -3,6 +3,7 @@ import { Message, MessageType, Priority } from '../bus/types';
 import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { generateStructuredOutput } from '../llm/anthropic';
+import { DynamicStructuredTool } from "@langchain/core/tools";
 
 export interface TaskAgentConfig extends AgentConfig {
   maxSubtasks?: number;
@@ -17,17 +18,14 @@ interface Task {
   metadata?: Record<string, any>;
 }
 
-// Schema for subtask structure
-const SubtaskSchema = z.object({
-  subtasks: z.array(z.object({
-    description: z.string(),
-    toolName: z.string().optional(),
-    parameters: z.record(z.any()).optional(),
-    dependencies: z.array(z.string()).optional()
-  }))
+// Schema for task analysis
+const TaskAnalysisSchema = z.object({
+  toolName: z.string().describe("The name of the tool to use"),
+  parameters: z.record(z.any()).describe("Parameters for the tool"),
+  reasoning: z.string().describe("Reasoning behind the tool selection and parameters")
 });
 
-type SubtaskOutput = z.infer<typeof SubtaskSchema>;
+type TaskAnalysis = z.infer<typeof TaskAnalysisSchema>;
 
 export class TaskAgent extends BaseAgent {
   private maxSubtasks: number;
@@ -49,13 +47,44 @@ export class TaskAgent extends BaseAgent {
     this.systemPrompt = config.systemPrompt || this.getDefaultSystemPrompt();
   }
 
+  private getToolParameterDescription(tool: DynamicStructuredTool): string {
+    try {
+      const schema = tool.schema as z.ZodObject<any>;
+      const shape = schema.shape;
+      
+      return Object.entries(shape).map(([name, field]) => {
+        const description = (field as z.ZodType)._def.description || name;
+        return `    - ${name}: ${description}`;
+      }).join('\n');
+    } catch (error) {
+      return '    (No parameter description available)';
+    }
+  }
+
   private getDefaultSystemPrompt(): string {
-    return `You are a task planning assistant that helps break down complex tasks into smaller, manageable subtasks.
-    When given a task, analyze it and break it down into logical subtasks. Each subtask should be clear and actionable.
-    Consider dependencies between subtasks and specify which tools (if any) are needed for each subtask.
+    const toolDescriptions = this.tools.map(tool => {
+      const paramDescriptions = this.getToolParameterDescription(tool);
+      return `- ${tool.name}: ${tool.description}
+  Parameters:
+${paramDescriptions}`;
+    }).join('\n\n');
+
+    return `You are a task planning assistant that helps execute commands using available tools.
+    When given a task, analyze it and determine which tool to use and what parameters to provide.
+    Consider the available tools and their capabilities carefully.
+
+    If you need more information to execute the task properly, ask for it naturally in your response.
+    Be specific about what information you need and why it would help complete the task.
 
     Available tools:
-    ${this.tools.map(tool => `- ${tool.name}: ${tool.description}`).join('\n')}`;
+${toolDescriptions}
+
+    Respond with:
+    1. The name of the tool to use (toolName)
+    2. The parameters for the tool (parameters)
+    3. Your reasoning (reasoning)
+
+    IMPORTANT: Make sure to use the exact parameter names as specified in the tool schemas.`;
   }
 
   protected async processMessage(message: Message): Promise<void> {
@@ -85,25 +114,26 @@ export class TaskAgent extends BaseAgent {
       // Store task
       task.status = 'in_progress';
 
-      // Generate subtasks using structured output
-      const result = await generateStructuredOutput<SubtaskOutput>(
+      // Analyze task using LLM
+      const analysis = await generateStructuredOutput<TaskAnalysis>(
         this.model,
         [new HumanMessage(task.description)],
-        SubtaskSchema,
+        TaskAnalysisSchema,
         this.systemPrompt
       );
 
-      const { subtasks } = result;
+      console.log('Task analysis:', analysis);
 
-      if (subtasks.length > this.maxSubtasks) {
-        throw new AgentError(`Too many subtasks generated (${subtasks.length} > ${this.maxSubtasks})`);
-      }
-
-      // Execute subtasks
-      const results = await this.executeSubtasks(subtasks, task.id);
+      // Execute the tool
+      const result = await this.executeTool(analysis.toolName, analysis.parameters);
 
       // Update task status
       task.status = 'completed';
+      task.metadata = {
+        ...task.metadata,
+        analysis,
+        result
+      };
 
       // Send response
       await this.sendMessage(
@@ -111,7 +141,8 @@ export class TaskAgent extends BaseAgent {
         {
           taskId: task.id,
           status: 'completed',
-          results
+          result,
+          analysis
         },
         Priority.MEDIUM,
         correlationId
@@ -119,38 +150,14 @@ export class TaskAgent extends BaseAgent {
     } catch (error) {
       // Update task status
       task.status = 'failed';
-
       throw error;
     }
-  }
-
-  private async executeSubtasks(subtasks: SubtaskOutput['subtasks'], taskId: string): Promise<any[]> {
-    const results: any[] = [];
-
-    for (const subtask of subtasks) {
-      try {
-        let result;
-        if (subtask.toolName && this.tools.find(t => t.name === subtask.toolName)) {
-          result = await this.executeTool(subtask.toolName, subtask.parameters || {});
-        } else {
-          // If no tool specified or tool not found, store the subtask description as the result
-          result = subtask.description;
-        }
-        results.push({ description: subtask.description, result });
-      } catch (error) {
-        throw new AgentError(
-          `Failed to execute subtask "${subtask.description}": ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
-    }
-
-    return results;
   }
 
   /**
    * Direct task execution method for convenience
    */
-  public async executeTask(description: string): Promise<any[]> {
+  public async executeTask(description: string): Promise<any> {
     const taskId = crypto.randomUUID();
     const task: Task = {
       id: taskId,
@@ -159,6 +166,6 @@ export class TaskAgent extends BaseAgent {
     };
 
     await this.handleTask(task, taskId);
-    return task.status === 'completed' ? task.metadata?.results || [] : [];
+    return task.metadata?.result;
   }
 }

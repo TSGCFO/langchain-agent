@@ -46,7 +46,7 @@ export abstract class BaseAgent extends EventEmitter {
     this.tools = config.tools;
     this.messageBus = config.messageBus;
     this.model = config.model || new ChatAnthropic({
-      modelName: "claude-3-opus-20240229",
+      modelName: "claude-3-5-sonnet-20241022",
       temperature: 0
     });
     this.subscriptions = config.messageTypes || [];
@@ -67,6 +67,7 @@ export abstract class BaseAgent extends EventEmitter {
 
     // Announce agent presence
     await this.messageBus.publish({
+      id: uuidv4(),
       type: MessageType.SYSTEM_EVENT,
       payload: {
         event: 'agent_initialized',
@@ -76,6 +77,12 @@ export abstract class BaseAgent extends EventEmitter {
           name: tool.name,
           description: tool.description
         }))
+      },
+      metadata: {
+        timestamp: Date.now(),
+        sender: this.id,
+        correlationId: uuidv4(),
+        priority: Priority.MEDIUM
       }
     });
   }
@@ -88,9 +95,8 @@ export abstract class BaseAgent extends EventEmitter {
       await this.processMessage(message);
     } catch (error) {
       const agentError = error instanceof Error 
-        ? new AgentError(error.message, error)
-        : new AgentError('Unknown error occurred');
-      
+        ? error 
+        : new AgentError(typeof error === 'string' ? error : 'Unknown error occurred');
       await this.handleError(agentError, message);
     }
   }
@@ -110,9 +116,11 @@ export abstract class BaseAgent extends EventEmitter {
     correlationId?: string
   ): Promise<void> {
     await this.messageBus.publish({
+      id: uuidv4(),
       type,
       payload,
       metadata: {
+        timestamp: Date.now(),
         sender: this.id,
         correlationId: correlationId || uuidv4(),
         priority
@@ -167,14 +175,13 @@ export abstract class BaseAgent extends EventEmitter {
   /**
    * Handle errors
    */
-  protected async handleError(error: AgentError, sourceMessage?: Message): Promise<void> {
+  protected async handleError(error: Error, sourceMessage?: Message): Promise<void> {
     await this.sendMessage(
       MessageType.SYSTEM_EVENT,
       {
         event: 'agent_error',
         agentId: this.id,
         error: error.message,
-        details: error.details,
         sourceMessage
       },
       Priority.HIGH
@@ -192,11 +199,18 @@ export abstract class BaseAgent extends EventEmitter {
 
     // Announce agent shutdown
     await this.messageBus.publish({
+      id: uuidv4(),
       type: MessageType.SYSTEM_EVENT,
       payload: {
         event: 'agent_shutdown',
         agentId: this.id,
         agentName: this.name
+      },
+      metadata: {
+        timestamp: Date.now(),
+        sender: this.id,
+        correlationId: uuidv4(),
+        priority: Priority.MEDIUM
       }
     });
   }

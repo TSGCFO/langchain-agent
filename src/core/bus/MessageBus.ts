@@ -1,19 +1,17 @@
 import { EventEmitter } from 'events';
-import { Message, MessageType, Priority } from './types';
+import { Message, MessageType } from './types';
 
-interface MessageBusConfig {
-  redis?: {
-    url: string;
-  };
-}
+type MessageHandler = (message: Message) => void;
 
 export class MessageBus {
   private eventEmitter: EventEmitter;
   private initialized: boolean = false;
+  private handlers: Map<MessageType, Set<MessageHandler>>;
 
-  constructor(_config: MessageBusConfig) {
+  constructor() {
     this.eventEmitter = new EventEmitter();
     this.eventEmitter.setMaxListeners(100); // Allow more listeners
+    this.handlers = new Map();
   }
 
   async initialize(): Promise<void> {
@@ -37,23 +35,40 @@ export class MessageBus {
     }
 
     // Emit the message to all subscribers
-    this.eventEmitter.emit(message.type, message);
+    const handlers = this.handlers.get(message.type) || new Set();
+    for (const handler of handlers) {
+      try {
+        await handler(message);
+      } catch (error) {
+        console.error('Error in message handler:', error);
+      }
+    }
   }
 
-  subscribe(type: MessageType, handler: (message: Message) => void): void {
+  subscribe(type: MessageType, handler: MessageHandler): void {
     if (!this.initialized) {
       throw new Error('MessageBus not initialized');
     }
 
-    this.eventEmitter.on(type, handler);
+    if (!this.handlers.has(type)) {
+      this.handlers.set(type, new Set());
+    }
+
+    this.handlers.get(type)!.add(handler);
   }
 
-  unsubscribe(type: MessageType, handler: (message: Message) => void): void {
+  unsubscribe(type: MessageType, handler: MessageHandler): void {
     if (!this.initialized) {
       throw new Error('MessageBus not initialized');
     }
 
-    this.eventEmitter.off(type, handler);
+    const handlers = this.handlers.get(type);
+    if (handlers) {
+      handlers.delete(handler);
+      if (handlers.size === 0) {
+        this.handlers.delete(type);
+      }
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -61,7 +76,8 @@ export class MessageBus {
       return;
     }
 
-    this.eventEmitter.removeAllListeners();
+    // Clear all handlers
+    this.handlers.clear();
     this.initialized = false;
   }
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
 import Layout from './components/Layout/Layout';
 import CommandInterface from './components/CommandInterface/CommandInterface';
@@ -12,18 +12,8 @@ const darkTheme = createTheme({
 
 // Main content component that uses the command context
 function MainContent() {
-  const { connected, sendCommand, lastResponse } = useCommand();
+  const { connected, sendCommand } = useCommand();
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
-
-  // Handle responses from the server
-  useEffect(() => {
-    if (lastResponse) {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: typeof lastResponse === 'string' ? lastResponse : JSON.stringify(lastResponse, null, 2)
-      }]);
-    }
-  }, [lastResponse]);
 
   const handleCommand = async (command: string) => {
     // Add user message
@@ -31,7 +21,36 @@ function MainContent() {
 
     try {
       // Send command through WebSocket
-      await sendCommand(command);
+      const result = await sendCommand(command);
+      
+      // Format the response
+      let responseContent = '';
+      if (typeof result === 'string') {
+        responseContent = result;
+      } else if (result?.analysis?.reasoning) {
+        // Include both reasoning and result if available
+        const parts = [
+          result.analysis.reasoning,
+          result.result ? 
+            (typeof result.result === 'string' ? 
+              result.result : 
+              JSON.stringify(result.result, null, 2)
+            ) : ''
+        ].filter(Boolean);
+        responseContent = parts.join('\n\n');
+      } else if (result?.result) {
+        responseContent = typeof result.result === 'string' ? 
+          result.result : 
+          JSON.stringify(result.result, null, 2);
+      } else {
+        responseContent = JSON.stringify(result, null, 2);
+      }
+
+      // Add assistant message
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: responseContent
+      }]);
     } catch (error) {
       // Add error message
       setMessages(prev => [...prev, { 
@@ -52,7 +71,6 @@ function MainContent() {
   );
 }
 
-// Main App component wrapped with providers
 function App() {
   return (
     <ThemeProvider theme={darkTheme}>

@@ -1,104 +1,60 @@
 import { EventEmitter } from 'events';
+import { v4 as uuidv4 } from 'uuid';
 import { BaseAgent } from './BaseAgent';
-import { RAGAgent } from './RAGAgent';
-import { TaskAgent } from './TaskAgent';
-import { MessageBus } from '../bus/MessageBus';
 import { Message, MessageType, Priority } from '../bus/types';
-
-export interface AgentRegistryConfig {
-  messageBus: MessageBus;
-}
-
-export class AgentRegistryError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AgentRegistryError';
-  }
-}
+import { MessageBus } from '../bus/MessageBus';
 
 interface SystemEventPayload {
   event: string;
-  agentId?: string;
-  agentName?: string;
-  error?: string;
-  timestamp: number;
+  agentId: string;
+  [key: string]: any;
 }
 
 export class AgentRegistry extends EventEmitter {
   private agents: Map<string, BaseAgent>;
   private messageBus: MessageBus;
-  private initialized: boolean = false;
 
-  constructor(config: AgentRegistryConfig) {
+  constructor(messageBus: MessageBus) {
     super();
     this.agents = new Map();
-    this.messageBus = config.messageBus;
+    this.messageBus = messageBus;
+
+    // Subscribe to system events
+    this.messageBus.subscribe(MessageType.SYSTEM_EVENT, this.handleSystemEvent.bind(this));
   }
 
   /**
-   * Initialize the agent registry
-   */
-  async initialize(): Promise<void> {
-    if (this.initialized) {
-      throw new AgentRegistryError('Agent registry already initialized');
-    }
-
-    try {
-      await this.messageBus.initialize();
-      this.initialized = true;
-
-      // Subscribe to system events
-      this.messageBus.subscribe(MessageType.SYSTEM_EVENT, this.handleSystemEvent.bind(this));
-
-      await this.messageBus.publish({
-        type: MessageType.SYSTEM_EVENT,
-        payload: {
-          event: 'registry_initialized',
-          timestamp: Date.now()
-        } as SystemEventPayload
-      });
-    } catch (error) {
-      throw new AgentRegistryError(
-        `Failed to initialize agent registry: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
-  /**
-   * Register an agent
+   * Register a new agent
    */
   async registerAgent(agent: BaseAgent): Promise<void> {
-    if (!this.initialized) {
-      throw new AgentRegistryError('Agent registry not initialized');
+    const info = agent.getInfo();
+    if (!info.id) {
+      throw new Error('Agent must have an ID');
     }
 
-    const agentInfo = agent.getInfo();
-    if (!agentInfo.id) {
-      throw new AgentRegistryError('Agent must have an ID');
-    }
+    this.agents.set(info.id, agent);
 
-    if (this.agents.has(agentInfo.id)) {
-      throw new AgentRegistryError(`Agent with ID ${agentInfo.id} already registered`);
-    }
-
-    try {
-      await agent.initialize();
-      this.agents.set(agentInfo.id, agent);
-
-      await this.messageBus.publish({
-        type: MessageType.SYSTEM_EVENT,
-        payload: {
-          event: 'agent_registered',
-          agentId: agentInfo.id,
-          agentName: agentInfo.name,
-          timestamp: Date.now()
-        } as SystemEventPayload
-      });
-    } catch (error) {
-      throw new AgentRegistryError(
-        `Failed to register agent ${agentInfo.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    // Announce agent registration
+    await this.messageBus.publish({
+      id: uuidv4(),
+      type: MessageType.SYSTEM_EVENT,
+      payload: {
+        event: 'agent_registered',
+        agentId: info.id,
+        agentName: info.name,
+        agentDescription: info.description,
+        capabilities: info.tools.map(tool => ({
+          name: tool.name,
+          description: tool.description
+        }))
+      },
+      metadata: {
+        timestamp: Date.now(),
+        sender: 'agent_registry',
+        correlationId: uuidv4(),
+        priority: Priority.MEDIUM
+      }
+    });
   }
 
   /**
@@ -107,26 +63,28 @@ export class AgentRegistry extends EventEmitter {
   async unregisterAgent(agentId: string): Promise<void> {
     const agent = this.agents.get(agentId);
     if (!agent) {
-      throw new AgentRegistryError(`Agent with ID ${agentId} not found`);
+      return;
     }
 
-    try {
-      await agent.shutdown();
-      this.agents.delete(agentId);
+    await agent.shutdown();
+    this.agents.delete(agentId);
 
-      await this.messageBus.publish({
-        type: MessageType.SYSTEM_EVENT,
-        payload: {
-          event: 'agent_unregistered',
-          agentId,
-          timestamp: Date.now()
-        } as SystemEventPayload
-      });
-    } catch (error) {
-      throw new AgentRegistryError(
-        `Failed to unregister agent ${agentId}: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+    // Announce agent unregistration
+    await this.messageBus.publish({
+      id: uuidv4(),
+      type: MessageType.SYSTEM_EVENT,
+      payload: {
+        event: 'agent_unregistered',
+        agentId,
+        agentName: agent.getInfo().name
+      },
+      metadata: {
+        timestamp: Date.now(),
+        sender: 'agent_registry',
+        correlationId: uuidv4(),
+        priority: Priority.MEDIUM
+      }
+    });
   }
 
   /**
@@ -144,108 +102,59 @@ export class AgentRegistry extends EventEmitter {
   }
 
   /**
-   * Get agents by type
-   */
-  getAgentsByType<T extends BaseAgent>(type: new (...args: any[]) => T): T[] {
-    return Array.from(this.agents.values()).filter(
-      (agent): agent is T => agent instanceof type
-    );
-  }
-
-  /**
    * Handle system events
    */
   private async handleSystemEvent(message: Message): Promise<void> {
-    const payload = message.payload as SystemEventPayload;
-    if (!payload || !payload.event) return;
-
-    switch (payload.event) {
-      case 'agent_error':
-        if (payload.agentId) {
-          this.emit('agent_error', {
-            agentId: payload.agentId,
-            error: payload.error || 'Unknown error',
-            timestamp: message.metadata.timestamp
-          });
-        }
-        break;
-
-      case 'agent_initialized':
-      case 'agent_shutdown':
-        if (payload.agentId) {
-          this.emit(payload.event, {
-            agentId: payload.agentId,
-            timestamp: message.metadata.timestamp
-          });
-        }
-        break;
-    }
-  }
-
-  /**
-   * Get the most suitable agent for a task
-   */
-  async getAgentForTask(task: string): Promise<BaseAgent> {
-    // Get all task agents
-    const taskAgents = this.getAgentsByType(TaskAgent);
-    if (taskAgents.length === 0) {
-      throw new AgentRegistryError('No task agents available');
-    }
-
-    // For now, just return the first task agent
-    // TODO: Implement more sophisticated agent selection based on task requirements
-    return taskAgents[0];
-  }
-
-  /**
-   * Get the most suitable RAG agent for a query
-   */
-  async getAgentForQuery(query: string): Promise<RAGAgent> {
-    // Get all RAG agents
-    const ragAgents = this.getAgentsByType(RAGAgent);
-    if (ragAgents.length === 0) {
-      throw new AgentRegistryError('No RAG agents available');
-    }
-
-    // For now, just return the first RAG agent
-    // TODO: Implement more sophisticated agent selection based on query requirements
-    return ragAgents[0];
-  }
-
-  /**
-   * Shutdown the registry and all agents
-   */
-  async shutdown(): Promise<void> {
-    if (!this.initialized) {
+    if (message.type !== MessageType.SYSTEM_EVENT) {
       return;
     }
 
-    try {
-      // Shutdown all agents
-      await Promise.all(
-        Array.from(this.agents.values()).map(agent => agent.shutdown())
-      );
+    const payload = message.payload as SystemEventPayload;
 
-      // Clear agents
-      this.agents.clear();
+    switch (payload.event) {
+      case 'agent_error':
+        // Log agent errors
+        console.error(`Agent ${payload.agentId} error:`, payload.error);
+        break;
 
-      // Publish shutdown event
-      await this.messageBus.publish({
-        type: MessageType.SYSTEM_EVENT,
-        payload: {
-          event: 'registry_shutdown',
-          timestamp: Date.now()
-        } as SystemEventPayload
-      });
+      case 'agent_shutdown':
+        // Remove agent on shutdown
+        if (payload.agentId) {
+          await this.unregisterAgent(payload.agentId);
+        }
+        break;
 
-      // Shutdown message bus
-      await this.messageBus.shutdown();
-
-      this.initialized = false;
-    } catch (error) {
-      throw new AgentRegistryError(
-        `Failed to shutdown agent registry: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
+      default:
+        // Emit other events for external handlers
+        this.emit(payload.event, payload);
     }
+  }
+
+  /**
+   * Shutdown all agents
+   */
+  async shutdown(): Promise<void> {
+    // Unsubscribe from system events
+    this.messageBus.unsubscribe(MessageType.SYSTEM_EVENT, this.handleSystemEvent.bind(this));
+
+    // Shutdown all agents
+    const shutdowns = Array.from(this.agents.keys()).map(id => this.unregisterAgent(id));
+    await Promise.all(shutdowns);
+
+    // Announce registry shutdown
+    await this.messageBus.publish({
+      id: uuidv4(),
+      type: MessageType.SYSTEM_EVENT,
+      payload: {
+        event: 'registry_shutdown',
+        agentCount: this.agents.size
+      },
+      metadata: {
+        timestamp: Date.now(),
+        sender: 'agent_registry',
+        correlationId: uuidv4(),
+        priority: Priority.HIGH
+      }
+    });
   }
 }

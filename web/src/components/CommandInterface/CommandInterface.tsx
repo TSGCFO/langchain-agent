@@ -41,6 +41,7 @@ const MessageBubble = styled(Box, {
   color: isUser 
     ? theme.palette.primary.contrastText 
     : theme.palette.text.primary,
+  whiteSpace: 'pre-wrap',
 }));
 
 function CommandInterface({ messages, onSubmit, connected }: CommandInterfaceProps) {

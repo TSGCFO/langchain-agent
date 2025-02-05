@@ -7,6 +7,8 @@ import { createAgentSystem } from './core/agents';
 import { MemoryVectorStore } from "langchain/vectorstores/memory";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
+import { MessageBus } from './core/bus/MessageBus';
+import { systemTools } from './tools/systemTools';
 
 // Load environment variables
 config();
@@ -31,6 +33,13 @@ interface ClientToServerEvents {
   disconnect: () => void;
 }
 
+// Define the type for our agent system
+type AgentSystem = {
+  executeTask: (command: string) => Promise<any>;
+  query: (query: string) => Promise<string>;
+  shutdown: () => Promise<void>;
+};
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -44,10 +53,22 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 app.use(cors());
 app.use(express.json());
 
-// Initialize agent system
-async function initializeAgentSystem() {
+// Create shared instances that will be used across all connections
+// This is more efficient than creating new instances for each connection
+const sharedMessageBus = new MessageBus();
+let sharedAgentSystem: AgentSystem | null = null;
+
+// Initialize the shared system components
+async function initializeSharedSystem(): Promise<AgentSystem> {
+  if (sharedAgentSystem) {
+    return sharedAgentSystem;
+  }
+
   try {
-    console.log('Initializing agent system...');
+    console.log('Initializing shared system components...');
+    
+    // Initialize the shared message bus
+    await sharedMessageBus.initialize();
     
     const embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
@@ -61,20 +82,22 @@ async function initializeAgentSystem() {
 
     const model = new ChatAnthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
-      modelName: "claude-3-opus-20240229",
+      modelName: "claude-3-5-sonnet-20241022",
       temperature: 0
     });
 
-    console.log('Creating agent system...');
-    const system = await createAgentSystem({
+    console.log('Creating shared agent system...');
+    sharedAgentSystem = await createAgentSystem({
       model,
-      retriever: vectorStore.asRetriever()
+      retriever: vectorStore.asRetriever(),
+      messageBus: sharedMessageBus,
+      tools: systemTools
     });
-    console.log('Agent system initialized successfully');
+    console.log('Shared system components initialized successfully');
     
-    return system;
+    return sharedAgentSystem;
   } catch (error) {
-    console.error('Failed to initialize agent system:', error);
+    console.error('Failed to initialize shared system:', error);
     throw error;
   }
 }
@@ -84,15 +107,16 @@ io.on('connection', async (socket: Socket<ClientToServerEvents, ServerToClientEv
   console.log('Client connected');
 
   try {
-    const agentSystem = await initializeAgentSystem();
-    console.log('Agent system ready for client');
+    // Use the shared agent system for this connection
+    const system = await initializeSharedSystem();
+    console.log('Using shared agent system for client');
 
     socket.on('command', async (command: string) => {
       try {
         console.log('Received command:', command);
         
-        // Execute command using agent system
-        const result = await agentSystem.executeTask(command);
+        // Execute command using shared agent system
+        const result = await system.executeTask(command);
         console.log('Command result:', result);
         
         // Send response back to client
@@ -109,8 +133,8 @@ io.on('connection', async (socket: Socket<ClientToServerEvents, ServerToClientEv
       try {
         console.log('Received query:', query);
         
-        // Execute query using agent system
-        const result = await agentSystem.query(query);
+        // Execute query using shared agent system
+        const result = await system.query(query);
         console.log('Query result:', result);
         
         // Send response back to client
@@ -123,14 +147,14 @@ io.on('connection', async (socket: Socket<ClientToServerEvents, ServerToClientEv
       }
     });
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', () => {
       console.log('Client disconnected');
-      await agentSystem.shutdown();
+      // No need to shut down the shared system when a client disconnects
     });
   } catch (error) {
-    console.error('Error initializing agent system:', error);
+    console.error('Error setting up client connection:', error);
     socket.emit('error', {
-      message: 'Failed to initialize agent system'
+      message: 'Failed to initialize connection'
     });
     socket.disconnect();
   }
@@ -143,6 +167,13 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Start server
 const PORT = process.env.PORT || 4000;
-httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+httpServer.listen(PORT, async () => {
+  try {
+    // Initialize shared system components before accepting connections
+    await initializeSharedSystem();
+    console.log(`Server running on port ${PORT}`);
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
 });
