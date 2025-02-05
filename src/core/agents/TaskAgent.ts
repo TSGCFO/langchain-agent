@@ -4,6 +4,7 @@ import { HumanMessage } from "@langchain/core/messages";
 import { z } from "zod";
 import { generateStructuredOutput } from '../llm/anthropic';
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import { logger } from '../logging/Logger';
 
 export interface TaskAgentConfig extends AgentConfig {
   maxSubtasks?: number;
@@ -15,7 +16,7 @@ interface Task {
   description: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   parentId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // Schema for task analysis
@@ -73,9 +74,6 @@ ${paramDescriptions}`;
     When given a task, analyze it and determine which tool to use and what parameters to provide.
     Consider the available tools and their capabilities carefully.
 
-    If you need more information to execute the task properly, ask for it naturally in your response.
-    Be specific about what information you need and why it would help complete the task.
-
     Available tools:
 ${toolDescriptions}
 
@@ -110,12 +108,18 @@ ${toolDescriptions}
   }
 
   private async handleTask(task: Task, correlationId: string): Promise<void> {
+    const startTime = Date.now();
+    let success = false;
+    let error: Error | undefined;
+    let analysis: TaskAnalysis | undefined;
+    let result: unknown;
+
     try {
       // Store task
       task.status = 'in_progress';
 
       // Analyze task using LLM
-      const analysis = await generateStructuredOutput<TaskAnalysis>(
+      analysis = await generateStructuredOutput<TaskAnalysis>(
         this.model,
         [new HumanMessage(task.description)],
         TaskAnalysisSchema,
@@ -124,8 +128,28 @@ ${toolDescriptions}
 
       console.log('Task analysis:', analysis);
 
+      // Log the interaction before executing the tool
+      await logger.logInteraction({
+        command: task.description,
+        analysis,
+        result: null,
+        success: false,
+        metadata: {
+          agentId: this.id,
+          correlationId
+        }
+      });
+
       // Execute the tool
-      const result = await this.executeTool(analysis.toolName, analysis.parameters);
+      result = await this.executeTool(analysis.toolName, analysis.parameters);
+
+      // Log tool usage
+      await logger.logToolUsage({
+        toolName: analysis.toolName,
+        parameters: analysis.parameters,
+        result,
+        success: true
+      });
 
       // Update task status
       task.status = 'completed';
@@ -134,6 +158,8 @@ ${toolDescriptions}
         analysis,
         result
       };
+
+      success = true;
 
       // Send response
       await this.sendMessage(
@@ -147,9 +173,60 @@ ${toolDescriptions}
         Priority.MEDIUM,
         correlationId
       );
-    } catch (error) {
+
+      // Log final interaction state
+      await logger.logInteraction({
+        command: task.description,
+        analysis,
+        result,
+        success: true,
+        metadata: {
+          agentId: this.id,
+          correlationId,
+          executionTime: Date.now() - startTime
+        }
+      });
+
+      // Log evaluation metrics
+      await logger.logEvaluation({
+        interactionId: task.id,
+        metrics: {
+          toolSelectionAccuracy: 1.0, // We could implement more sophisticated metrics
+          reasoningQuality: 1.0,
+          taskCompletionSuccess: 1.0
+        }
+      });
+
+    } catch (err) {
       // Update task status
       task.status = 'failed';
+      error = err instanceof Error ? err : new Error('Unknown error');
+      success = false;
+
+      // Log failure
+      await logger.logInteraction({
+        command: task.description,
+        analysis: analysis || { toolName: 'unknown', parameters: {}, reasoning: '' },
+        result: null,
+        success: false,
+        error: error.message,
+        metadata: {
+          agentId: this.id,
+          correlationId,
+          executionTime: Date.now() - startTime
+        }
+      });
+
+      if (analysis) {
+        await logger.logToolUsage({
+          toolName: analysis.toolName,
+          parameters: analysis.parameters,
+          result: null,
+          success: false,
+          error: error.message
+        });
+      }
+
       throw error;
     }
   }

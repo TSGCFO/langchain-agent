@@ -1,176 +1,156 @@
-# LangChain Multi-Agent System
+# LangChain Agent System
 
-A sophisticated distributed multi-agent architecture orchestrating specialized agents powered by OpenAI, Anthropic, and Google models. The system enables real-time collaboration, transparent communication flows, and intelligent task routing based on agent capabilities.
+A distributed multi-agent system with advanced learning capabilities, built with LangChain.
 
 ## Features
 
-- **Advanced Agent Architecture**
-  - Distributed multi-agent system
-  - Real-time collaboration between agents
-  - Intelligent task routing
-  - Fault tolerance and redundancy
-
-- **RAG Implementation**
-  - Dynamic knowledge base updates
-  - Context-aware retrieval
-  - Efficient vector storage
-  - Semantic search capabilities
-
-- **Memory Management**
-  - Persistent memory with context awareness
-  - Short-term and long-term memory systems
-  - Efficient caching strategies
-  - Memory consolidation
-
-- **Advanced Features**
-  - Hallucination detection and mitigation
-  - Self-evolving training mechanisms
-  - Performance analytics
-  - Automated system refinements
-
-## Prerequisites
-
-- Node.js (v18 or higher)
-- Redis server
-- API Keys:
-  - Anthropic (Claude)
-  - OpenAI
+- **Intelligent Task Decomposition**: Breaks down complex tasks into manageable subtasks
+- **Advanced Learning System**: Continuously learns and improves from interactions
+- **Comprehensive Logging**: Tracks all interactions for analysis and training
+- **Performance Monitoring**: Real-time monitoring and analysis of system performance
+- **Automated Training**: Tools for preparing fine-tuning datasets
+- **CLI Management**: Easy-to-use command line interface for system management
 
 ## Installation
 
-1. Clone the repository:
 ```bash
+# Clone the repository
 git clone https://github.com/yourusername/langchain-agent.git
 cd langchain-agent
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys
 ```
 
-3. Configure environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your API keys and configuration
+## Environment Variables
+
+```env
+ANTHROPIC_API_KEY=your_anthropic_api_key
+OPENAI_API_KEY=your_openai_api_key
 ```
 
 ## Usage
 
-### Running the Example
+### Starting the System
 
 ```bash
-npm run example
+# Start the development server
+npm run dev
+
+# Or start production server
+npm start
 ```
 
-This will run a demonstration of the system's capabilities, including:
-- Task decomposition and execution
-- Knowledge retrieval and generation
-- Multi-agent collaboration
+### Using the CLI
 
-### Using in Your Project
+The system comes with a command-line interface for management:
 
-```typescript
-import { createAgentSystem } from 'langchain-agent';
+```bash
+# Check system status
+npm run cli status
 
-async function main() {
-  const system = await createAgentSystem({
-    // Optional configuration
-    tools: yourCustomTools,
-    retriever: yourVectorStore.asRetriever(),
-  });
+# Run system analysis
+npm run cli analyze --days 7
 
-  // Execute a task
-  const taskResult = await system.executeTask(
-    'Create a file named example.txt with content "Hello, World!"'
-  );
+# Prepare training data
+npm run cli train --min-samples 200
 
-  // Query knowledge
-  const queryResult = await system.query(
-    'What files were created?'
-  );
+# Run monitoring cycle
+npm run cli monitor
 
-  // Clean up
-  await system.shutdown();
-}
+# Initialize system
+npm run cli init
+```
+
+### CLI Options
+
+- `status`: Check system health and get recommendations
+- `analyze`: Generate analysis report
+  - `--days <number>`: Number of days to analyze (default: 30)
+- `train`: Prepare training data
+  - `--min-samples <number>`: Minimum samples per tool (default: 100)
+  - `--success-rate <number>`: Minimum success rate (default: 0.9)
+  - `--max-samples <number>`: Maximum samples per tool (default: 1000)
+- `monitor`: Run a monitoring cycle
+- `init`: Initialize the system
+
+## Learning System
+
+The system includes a comprehensive learning pipeline:
+
+1. **Interaction Logging**: All agent interactions are logged with detailed metadata
+2. **Performance Analysis**: Regular analysis of tool usage and success rates
+3. **Pattern Recognition**: Identifies successful interaction patterns
+4. **Training Data Preparation**: Automatically prepares fine-tuning datasets
+5. **Continuous Improvement**: Uses insights to improve tool selection and reasoning
+
+### Log Analysis
+
+The system analyzes logs to generate insights about:
+
+- Tool usage patterns and success rates
+- Common reasoning patterns
+- Performance metrics
+- Areas needing improvement
+
+### Training Data Generation
+
+Training data is prepared in multiple formats:
+
+- Anthropic Claude format
+- OpenAI GPT format
+- Raw interaction data
+
+## Monitoring
+
+The system includes real-time monitoring:
+
+- Performance metrics tracking
+- Error detection and logging
+- Health checks
+- Usage statistics
+- Automated recommendations
+
+## Directory Structure
+
+```
+src/
+├── core/
+│   ├── agents/      # Agent implementations
+│   ├── logging/     # Logging system
+│   ├── llm/         # LLM integrations
+│   └── system/      # Core system components
+├── scripts/
+│   ├── analyze-logs.ts  # Log analysis tools
+│   ├── cli.ts          # CLI interface
+│   ├── manage.ts       # System management
+│   ├── monitor.ts      # Monitoring system
+│   └── train.ts        # Training data preparation
+└── server.ts       # Main server
 ```
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Run all tests
+# Run tests
 npm test
 
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-```
-
-### Linting
-
-```bash
-# Run linter
+# Lint code
 npm run lint
 
-# Fix linting issues
-npm run lint:fix
-```
-
-### Building
-
-```bash
-# Build the project
-npm run build
-
-# Clean build output
-npm run clean
-```
-
-## Project Structure
-
-```
-src/
-├── agents/              # Agent implementations
-│   ├── base/           # Base agent classes
-│   ├── rag/            # RAG agents
-│   └── specialized/    # Specialized agents
-├── core/               # Core system components
-│   ├── bus/           # Message bus
-│   ├── memory/        # Memory management
-│   └── tools/         # Tool implementations
-├── api/               # API layer
-└── utils/             # Shared utilities
-```
-
-## Architecture
-
-The system is built on a distributed architecture with the following key components:
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Task Agents   │     │    RAG Agents   │     │ Learning Agents │
-└───────┬─────────┘     └───────┬─────────┘     └───────┬─────────┘
-        │                       │                        │
-        ▼                       ▼                        ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        Message Bus                               │
-└─────────────────────────────────────────────────────────────────┘
-        ▲                       ▲                        ▲
-        │                       │                        │
-┌───────┴─────────┐     ┌──────┴──────────┐     ┌──────┴──────────┐
-│  Tool Registry  │     │  Vector Store   │     │ Memory Manager  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+# Format code
+npm run format
 ```
 
 ## Contributing
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
@@ -180,14 +160,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- LangChain team
-- OpenAI
-- Anthropic
-- Contributing developers
-
-## Support
-
-- GitHub Issues
-- Documentation Wiki
-- Community Discord
-- Stack Overflow tag: `langchain-agent`
+- LangChain for the excellent framework
+- Anthropic and OpenAI for their powerful LLMs
+- All contributors to this project
